@@ -75,13 +75,35 @@ tab1, tab2, tab3 = st.tabs(["Rename", "Klasifikasi", "Merge"])
 with tab1:
     st.subheader("Rename File PDF")
     files = st.file_uploader("Pilih PDF untuk di-rename", type="pdf", accept_multiple_files=True, key="rename_upload")
+    
     if st.button("Proses Rename") and files:
-        for f in files:
-            ref = extract_referensi(f)
-            if ref:
-                st.success(f"File: {f.name} -> **{ref}_{f.name}**")
-            else:
-                st.warning(f"Referensi tidak ditemukan pada: {f.name}")
+        rename_buffer = io.BytesIO()
+        processed_count = 0
+        
+        with zipfile.ZipFile(rename_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+            for f in files:
+                ref = extract_referensi(f)
+                if ref:
+                    # Membuat nama file baru: PJxxxx_NamaAsli.pdf
+                    new_filename = f"{ref}_{f.name}"
+                    # Masukkan ke dalam ZIP
+                    zip_file.writestr(new_filename, f.getvalue())
+                    st.success(f"✅ Terdeteksi: **{ref}** untuk {f.name}")
+                    processed_count += 1
+                else:
+                    st.warning(f"⚠️ Referensi tidak ditemukan di: {f.name}")
+        
+        if processed_count > 0:
+            st.divider()
+            st.write(f"Total {processed_count} file berhasil diproses.")
+            # Tombol untuk mendownload semua file yang sudah di-rename dalam satu ZIP
+            st.download_button(
+                label="⬇️ Download Semua File Hasil Rename (ZIP)",
+                data=rename_buffer.getvalue(),
+                file_name="faktur_pajak_renamed.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
 
 with tab2:
     st.subheader("Klasifikasi & Download ZIP")
@@ -132,3 +154,4 @@ with tab3:
             mime="application/pdf"
         )
     
+
