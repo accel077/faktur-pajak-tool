@@ -2,6 +2,7 @@ import streamlit as st
 import pdfplumber
 from PyPDF2 import PdfMerger
 import re
+import zipfile
 import io
 from openpyxl import load_workbook
 
@@ -83,16 +84,36 @@ with tab1:
                 st.warning(f"Referensi tidak ditemukan pada: {f.name}")
 
 with tab2:
-    st.subheader("Klasifikasi Berdasarkan Warna")
+    st.subheader("Klasifikasi & Download ZIP")
     if not color_map:
         st.info("Silakan upload file Excel di sidebar terlebih dahulu.")
     else:
         files = st.file_uploader("Pilih PDF untuk diklasifikasi", type="pdf", accept_multiple_files=True, key="class_upload")
-        if st.button("Proses Klasifikasi") and files:
-            for f in files:
-                ref = extract_referensi(f)
-                folder = color_map.get(ref, "Tidak_Ada_Di_Excel")
-                st.write(f"📁 {f.name} masuk ke folder: **{folder}**")
+        
+        if files:
+            # Siapkan Buffer untuk ZIP
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                for f in files:
+                    ref = extract_referensi(f)
+                    folder_name = color_map.get(ref, "Tidak_Ada_Di_Excel")
+                    
+                    # Simpan file ke dalam folder di dalam ZIP
+                    # Format: Nama_Folder/Nama_File.pdf
+                    zip_path = f"{folder_name}/{f.name}"
+                    zip_file.writestr(zip_path, f.getvalue())
+            
+            st.success(f"{len(files)} file siap dikelompokkan!")
+            
+            # Tombol Download ZIP
+            st.download_button(
+                label="Download Hasil Klasifikasi (ZIP)",
+                data=zip_buffer.getvalue(),
+                file_name="faktur_terklasifikasi.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
 
 with tab3:
     st.subheader("Gabung PDF (Merge)")
@@ -110,3 +131,4 @@ with tab3:
             file_name="hasil_gabungan.pdf",
             mime="application/pdf"
         )
+    
