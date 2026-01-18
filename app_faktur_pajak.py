@@ -2,11 +2,11 @@ import streamlit as st
 import pdfplumber
 from PyPDF2 import PdfMerger
 import re
-import zipfile
 import io
+import zipfile
 from openpyxl import load_workbook
 
-# --- FUNGSI LOGIKA (Diambil dari kode asli Anda) ---
+# --- FUNGSI LOGIKA ---
 
 def identify_color_name(color_hex):
     if not color_hex or color_hex == "00000000":
@@ -52,106 +52,66 @@ def extract_referensi(pdf_file):
         return None
     except: return None
 
-# --- TAMPILAN STREAMLIT ---
+# --- TAMPILAN UTAMA ---
 
 st.set_page_config(page_title="Faktur Pajak Tool", layout="centered")
-
 st.title("📑 Faktur Pajak Tool")
-st.write("Versi Web (Mobile Friendly)")
 
-# Sidebar untuk Database Excel
+# Sidebar untuk Database
 with st.sidebar:
-    st.header("Settings")
-    excel_db = st.file_uploader("Upload Excel Warna (Opsional)", type=["xlsx"])
-    color_map = None
-    if excel_db:
-        color_map = get_color_mapping(excel_db)
-        if color_map:
-            st.success("Database Dimuat!")
+    st.header("Database")
+    excel_db = st.file_uploader("Upload Excel Warna", type=["xlsx"])
+    color_map = get_color_mapping(excel_db) if excel_db else None
+    if color_map: st.success("Database Dimuat!")
 
-# Tab Menu
 tab1, tab2, tab3 = st.tabs(["Rename", "Klasifikasi", "Merge"])
 
+# --- TAB 1: RENAME ---
 with tab1:
-    st.subheader("Rename File PDF")
-    files = st.file_uploader("Pilih PDF untuk di-rename", type="pdf", accept_multiple_files=True, key="rename_upload")
+    st.subheader("Rename File (PJ + 3 Kata Terakhir)")
+    files = st.file_uploader("Pilih PDF", type="pdf", accept_multiple_files=True, key="ren")
     
     if st.button("Proses Rename") and files:
         rename_buffer = io.BytesIO()
-        processed_count = 0
-        
-        with zipfile.ZipFile(rename_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+        with zipfile.ZipFile(rename_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_f:
             for f in files:
                 ref = extract_referensi(f)
                 if ref:
-                    # Membuat nama file baru: PJxxxx_NamaAsli.pdf
-                    new_filename = f"{ref}_{f.name}"
-                    # Masukkan ke dalam ZIP
-                    zip_file.writestr(new_filename, f.getvalue())
-                    st.success(f"✅ Terdeteksi: **{ref}** untuk {f.name}")
-                    processed_count += 1
-                else:
-                    st.warning(f"⚠️ Referensi tidak ditemukan di: {f.name}")
-        
-        if processed_count > 0:
-            st.divider()
-            st.write(f"Total {processed_count} file berhasil diproses.")
-            # Tombol untuk mendownload semua file yang sudah di-rename dalam satu ZIP
-            st.download_button(
-                label="⬇️ Download Semua File Hasil Rename (ZIP)",
-                data=rename_buffer.getvalue(),
-                file_name="faktur_pajak_renamed.zip",
-                mime="application/zip",
-                use_container_width=True
-            )
-
-with tab2:
-    st.subheader("Klasifikasi & Download ZIP")
-    if not color_map:
-        st.info("Silakan upload file Excel di sidebar terlebih dahulu.")
-    else:
-        files = st.file_uploader("Pilih PDF untuk diklasifikasi", type="pdf", accept_multiple_files=True, key="class_upload")
-        
-        if files:
-            # Siapkan Buffer untuk ZIP
-            zip_buffer = io.BytesIO()
-            
-            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-                for f in files:
-                    ref = extract_referensi(f)
-                    folder_name = color_map.get(ref, "Tidak_Ada_Di_Excel")
+                    # Logika mengambil 3 bagian terakhir dari nama file asli
+                    name_only = f.name.replace(".pdf", "").replace(".PDF", "")
+                    parts = name_only.split('-')
+                    suffix = "-".join(parts[-3:]) if len(parts) >= 3 else name_only
                     
-                    # Simpan file ke dalam folder di dalam ZIP
-                    # Format: Nama_Folder/Nama_File.pdf
-                    zip_path = f"{folder_name}/{f.name}"
-                    zip_file.writestr(zip_path, f.getvalue())
-            
-            st.success(f"{len(files)} file siap dikelompokkan!")
-            
-            # Tombol Download ZIP
-            st.download_button(
-                label="Download Hasil Klasifikasi (ZIP)",
-                data=zip_buffer.getvalue(),
-                file_name="faktur_terklasifikasi.zip",
-                mime="application/zip",
-                use_container_width=True
-            )
-
-with tab3:
-    st.subheader("Gabung PDF (Merge)")
-    files = st.file_uploader("Pilih minimal 2 PDF", type="pdf", accept_multiple_files=True, key="merge_upload")
-    if st.button("Gabungkan PDF") and len(files) >= 2:
-        merger = PdfMerger()
-        for f in files:
-            merger.append(f)
+                    new_name = f"{ref} {suffix}.pdf"
+                    zip_f.writestr(new_name, f.getvalue())
+                    st.success(f"✅ {f.name} -> **{new_name}**")
         
-        output = io.BytesIO()
-        merger.write(output)
-        st.download_button(
-            label="Download PDF Gabungan",
-            data=output.getvalue(),
-            file_name="hasil_gabungan.pdf",
-            mime="application/pdf"
-        )
-    
+        st.download_button("⬇️ Download ZIP Hasil Rename", rename_buffer.getvalue(), "hasil_rename.zip", "application/zip", use_container_width=True)
 
+# --- TAB 2: KLASIFIKASI ---
+with tab2:
+    st.subheader("Klasifikasi ke Folder ZIP")
+    if not color_map: st.info("Upload Excel di sidebar dahulu.")
+    else:
+        c_files = st.file_uploader("Pilih PDF", type="pdf", accept_multiple_files=True, key="cls")
+        if st.button("Proses Klasifikasi") and c_files:
+            cls_buffer = io.BytesIO()
+            with zipfile.ZipFile(cls_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_c:
+                for f in c_files:
+                    ref = extract_referensi(f)
+                    folder = color_map.get(ref, "Tidak_Ada_Di_Excel")
+                    zip_c.writestr(f"{folder}/{f.name}", f.getvalue())
+            st.download_button("⬇️ Download ZIP Terklasifikasi", cls_buffer.getvalue(), "klasifikasi.zip", "application/zip", use_container_width=True)
+
+# --- TAB 3: MERGE ---
+with tab3:
+    st.subheader("Gabung PDF")
+    m_files = st.file_uploader("Pilih minimal 2 PDF", type="pdf", accept_multiple_files=True, key="mrg")
+    if st.button("Gabungkan") and len(m_files) >= 2:
+        # Urutkan berdasarkan nama file secara ascending
+        sorted_files = sorted(m_files, key=lambda x: x.name)
+        merger = PdfMerger()
+        for f in sorted_files: merger.append(f)
+        out = io.BytesIO()
+        merger.write(out)
+        st.download_button("⬇️ Download PDF Gabungan", out.getvalue(), "hasil_merge.pdf", "application/pdf", use_container_width=True)
