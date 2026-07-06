@@ -17,7 +17,9 @@ def extract_referensi(pdf_file):
             for page in pdf.pages:
                 text = page.extract_text()
                 if text:
-                    match = re.search(r'PJ\d+', text)
+                    # EDIT: Mengubah regex agar menangkap kode referensi selain "PJ"
+                    # Pattern [A-Za-z]+\d+ akan mencocokkan huruf apa saja diikuti oleh angka (e.g., PJ123, INV456, ABC789)
+                    match = re.search(r'[A-Za-z]+\d+', text)
                     if match: return match.group(0)
         return None
     except: return None
@@ -36,7 +38,9 @@ def get_color_mapping(excel_file):
         for row in ws.iter_rows(min_row=2):
             cell = row[ref_col_idx-1]
             ref_val = str(cell.value).strip() if cell.value else None
-            if ref_val and ref_val.startswith("PJ"):
+            
+            # EDIT: Menghapus batasan .startswith("PJ") agar referensi non-PJ dari Excel juga ikut dipetakan warnanya
+            if ref_val and ref_val != "None":
                 fill = cell.fill
                 color_hex = fill.start_color.index if fill and hasattr(fill.start_color, 'index') else None
                 color_map[ref_val] = str(color_hex)
