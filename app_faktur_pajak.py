@@ -17,12 +17,14 @@ def extract_referensi(pdf_file):
             for page in pdf.pages:
                 text = page.extract_text()
                 if text:
-                    # PERBAIKAN: Mencari kata 'Referensi' diikuti oleh tanda baca/spasi opsional,
-                    # lalu menangkap kode alphanumeric (bisa non-PJ) walau terpisah spasi tak terlihat.
-                    match = re.search(r'Referensi[\s.,]*([A-Za-z]+\s*\d+)', text, re.IGNORECASE)
+                    # Menghapus spasi baris baru agar teks menjadi satu baris utuh
+                    text_cleaned = " ".join(text.split())
+                    
+                    # Regex Agresif: Mencari kata 'Referensi', melewati tanda baca/spasi apa pun, 
+                    # lalu menangkap huruf diikuti angka (Contoh: PJ2606245813 atau L14, dll)
+                    match = re.search(r'Referensi[^\w]*([A-Za-z0-9]+)', text_cleaned, re.IGNORECASE)
                     if match:
-                        # Mengambil grup tangkapan pertama dan membuang spasi di dalam kode jika ada
-                        return match.group(1).replace(" ", "")
+                        return match.group(1).strip()
         return None
     except: 
         return None
