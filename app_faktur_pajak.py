@@ -17,12 +17,15 @@ def extract_referensi(pdf_file):
             for page in pdf.pages:
                 text = page.extract_text()
                 if text:
-                    # EDIT: Mengubah regex agar menangkap kode referensi selain "PJ"
-                    # Pattern [A-Za-z]+\d+ akan mencocokkan huruf apa saja diikuti oleh angka (e.g., PJ123, INV456, ABC789)
-                    match = re.search(r'[A-Za-z]+\d+', text)
-                    if match: return match.group(0)
+                    # PERBAIKAN: Mencari kata 'Referensi' diikuti oleh tanda baca/spasi opsional,
+                    # lalu menangkap kode alphanumeric (bisa non-PJ) walau terpisah spasi tak terlihat.
+                    match = re.search(r'Referensi[\s.,]*([A-Za-z]+\s*\d+)', text, re.IGNORECASE)
+                    if match:
+                        # Mengambil grup tangkapan pertama dan membuang spasi di dalam kode jika ada
+                        return match.group(1).replace(" ", "")
         return None
-    except: return None
+    except: 
+        return None
 
 def get_color_mapping(excel_file):
     color_map = {}
@@ -39,7 +42,7 @@ def get_color_mapping(excel_file):
             cell = row[ref_col_idx-1]
             ref_val = str(cell.value).strip() if cell.value else None
             
-            # EDIT: Menghapus batasan .startswith("PJ") agar referensi non-PJ dari Excel juga ikut dipetakan warnanya
+            # PERBAIKAN: Menghapus batasan .startswith("PJ") agar referensi non-PJ dari Excel tetap terbaca
             if ref_val and ref_val != "None":
                 fill = cell.fill
                 color_hex = fill.start_color.index if fill and hasattr(fill.start_color, 'index') else None
